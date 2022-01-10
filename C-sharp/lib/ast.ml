@@ -1,8 +1,9 @@
 type _type = (* CT_Type *)
-  | TypeInt of int
-  | TypeChar of char (* ?? *)
+  | TypeInt
+  | TypeChar (* ?? *)
   | TypeVoid
   | TypeString
+  | TypeClass of string
 [@@deriving show { with_path = false }]
  (* Add more!!! *)
 

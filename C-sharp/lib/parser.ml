@@ -9,7 +9,7 @@ let reserved_keywords =
 let reserved_datatypes =
   [ "int"; "char"; "void" ]
 
-(* Basic checkers *)
+(** Basic checkers **)
 
 let is_reserved c = List.mem c reserved_keywords || List.mem c reserved_datatypes
 
@@ -27,7 +27,7 @@ let is_valid_first_char = function
     | 'a' .. 'z' | 'A' .. 'Z' | '_' -> true
     | _ -> false
 
-(* Basic parser functions *)
+(** Basic parser functions **)
 
 let is_gap c = is_whitespace c || is_end_of_line c
 
@@ -40,12 +40,33 @@ let del_space1 = take_while1 is_whitespace (* Do I need it? *)
 let token s = del_space *> string s
 
 let number =
-  del_space *> take_while1 is_digit >>= fun n -> return @@ TypeInt (int_of_string n)
+  del_space *> take_while1 is_digit >>= fun n -> return @@ ValInt (int_of_string n)
 
 let char_value =
-  char '\'' *> any_char <* char '\'' >>= fun ch -> return @@ TypeChar ch
+  char '\'' *> any_char <* char '\'' >>= fun ch -> return @@ ValChar ch
 
 let take_numbers_or_chars = take_while is_valid_char
+
+(** Other basic parsers **)
+
+let left_of p1 p = p <* del_space <* p1
+
+let right_of p1 p = p1 *> del_space *> p
+
+let between p1 p2 p = left_of p2 (right_of p1 p)
+
+let parens p = between (token "(") (token ")") p
+
+let braces p = between (token "{") (token "}") p
+
+let chainl1 e op =
+  let rec go acc = lift2 (fun f x -> f acc x) op e >>= go <|> return acc in
+  e >>= fun init -> go init
+
+let rec chainr1 e op =
+  e >>= fun a -> op >>= (fun f -> chainr1 e op >>| f a) <|> return a
+
+let lexeme p = p @@ skip_many del_gap
 
 
 (* Expression parsing functions *)
@@ -83,42 +104,79 @@ module Expr = struct
 
   let null = token "null" *> return Null
 
-  let first_priority_op = f_mul <|> f_div <|> f_mod <?> "Error: '*' or '/' or '%' expected!" <* del_space
-
-  let second_priority_op = del_space *> f_add <|> f_sub <?> "Error: +' or '-' expected!" <* del_space
-
-  let compare_op = f_ls <|> f_gr <|> f_lseq <|> f_greq <|> f_eq <|> f_neq <?> "Error: Compare operator expected!" <* del_space
-
   let ident =
   del_space *> peek_char >>= function
     | Some c when is_valid_first_char c -> take_numbers_or_chars
       >>= fun id -> if is_reserved id then fail "Error: Found a reserved word!" else return id
     | _ -> fail "Error: Invalid identifier!"
 
-  let def_type = false 
+  let def_type =
+     choice
+      [ token "int" *> return TypeInt; token "string" *> return TypeString; token "void" *> return TypeVoid;
+      (ident >>= fun c_name -> return @@ TypeClass c_name) ] (* ??? *)
+
+  let rec expr str = num_expr str
+
+  and num_expr str = (chainl1 and_expr f_or) str
+
+  and and_expr str = (chainl1 comp_expr f_and) str
+
+  and comp_expr str =
+    (chainl1 add_expr (f_lseq <|> f_greq <|> f_ls <|> f_gr <|> f_eq <|> f_neq)) str
+
+  and add_expr str = (chainl1 mul_expr (f_add <|> f_sub)) str
+
+  and mul_expr str = (chainl1 unar_expr (f_mul <|> f_div <|> f_mod)) str
+
+  and unar_expr str =
+    choice
+      [ (token "!" *> lexeme primar_expr >>= fun x -> return (Not x))
+      ; ( token "-" *> lexeme primar_expr
+        >>= fun x -> return @@ Sub (ConstExpr (ValInt 0), x) )
+      ; (token "++" *> lexeme primar_expr >>= fun x -> return (PreInc x))
+      ; (lexeme primar_expr >>= fun x -> token "++" *> return (PostInc x))
+      ; (token "--" *> lexeme primar_expr >>= fun x -> return (PreDec x))
+      ; (lexeme primar_expr >>= fun x -> token "--" *> return (PostDec x))
+      ; primar_expr ]
+      str
+
+  and primar_expr str =
+    ( init_instance <|> assign <|> field_access <|> call_method <|> parens expr <|> atomic ) str
+
+  and sep_comma str = sep_by expr (token ",") str
+
+  and call_method str =
+    ( ident
+    >>= fun name ->
+    token "(" *> sep_comma
+    >>= fun args -> token ")" *> return (CallMethod (name, args)) )
+      str
+
+  and init_instance input =
+    ( token "new" *> ident
+    >>= fun name ->
+    token "(" *> sep_comma
+    >>= fun args_list -> token ")" *> return (ClassCreate (name, args_list)) )
+      input
+
+  and field_access input =
+    let helper = parens init_instance <|> call_method <|> get_var in
+    ( helper
+    >>= fun head ->
+    many1 (token "." *> helper)
+    => fun tl -> List.fold_left (fun head tl -> Access (head, tl)) head tl )
+      input
+
+  and assign input =
+    let parse_left = field_access <|> call_method <|> get_var in
+    ( parse_left
+    >>= fun left ->
+    token "=" *> expr >>= fun right -> return (Assign (left, right)) )
+      input
 
   (* arrays? *)
 
 end
-
-(* Other basic parsers *)
-
-let left_of p1 p = p <* del_space <* p1
-
-let right_of p1 p = p1 *> del_space *> p
-
-let between p1 p2 p = left_of p2 (right_of p1 p)
-
-let parens p = between (token "(") (token ")") p
-
-let braces p = between (token "{") (token "}") p
-
-let chainl1 e op =
-  let rec go acc = lift2 (fun f x -> f acc x) op e >>= go <|> return acc in
-  e >>= fun init -> go init
-
-let rec chainr1 e op =
-  e >>= fun a -> op >>= (fun f -> chainr1 e op >>| f a) <|> return a
 
 
 (* TODO: Adapt expression parser + rewrite AST *)
@@ -126,8 +184,8 @@ let rec chainr1 e op =
 let get_modifiers =
   many 
     (choice 
-      [ token "public" *> return @@ Public ;  (*  token "public" >>= fun pub -> return @@ Public pub *)
-      token "static" *> return @@ Static ])
+      [ token "public" *> return Public ;  (*  token "public" >>= fun pub -> return @@ Public pub *)
+      token "static" *> return Static ])
 
 (* In-methods statements parsing *)
 
@@ -142,7 +200,7 @@ module Stmt = struct
 
     let rec parse_stmts str =
       choice
-        [ parse_if; parse_for; parse_while; parse_break; parse_continue; parse_block ] str
+        [ parse_expr str; parse_if str; parse_for str; parse_while str; parse_break str; parse_continue str; parse_block str ]
     
     and parse_if str =
     ( token "if" *> parens expr 
@@ -163,10 +221,10 @@ module Stmt = struct
         [ (expr >>= fun expr -> token ";" *> return (Some expr));
         token ";" *> return None ]
       >>= fun cond_stmt ->
-        sep_by exp r (token ",")
+        sep_by (token ",") expr
       >>= fun interrupt_stmt ->
         oken ")" *> parse_stmts
-      >>= fun block -> return @@ For (var_decl, cond_stmt, interrupt_stmt, block) ) input
+      >>= fun block -> return @@ For (var_decl, cond_stmt, interrupt_stmt, block) ) str
 
     and parse_while str = 
       ( token "while" *> parens expr
@@ -179,8 +237,39 @@ module Stmt = struct
 
     and parse_block str =
       ( braces (sep_by spaces parse_stmts)
-        >>= fun stats -> return @@ Block stmts )
-        input
+        >>= fun stmts -> return @@ Block stmts ) str
+
+    and return_stat str =
+    ( token "return" *> choice
+         [ ( del_gap *> expr
+           >>= fun res -> token ";" *> return @@ Return (Some result) );
+         token ";" *> return @@ Return None ] )
+      str
+
+    and parse_expr str =
+      (expr >>= fun _expr -> token ";" *> return @@ Expression _expr) str
+    
+    and parse_var str =
+      let helper = ident
+        >>= fun name ->
+        token "=" *> expr
+        >>= (fun value -> return (name, Some value))
+        <|> return (name, None)
+      in choice
+        [ ( const
+          >>= fun modifier ->
+          def_type
+          >>= fun v_type ->
+          sep_by1 helper (token ",")
+          >>= fun r_val ->
+          token ";" *> return (VarDeclr (Some modifier, v_type, r_val)) );
+          ( def_type
+          >>= fun v_type ->
+          sep_by1 helper (token ",")
+          >>= fun r_val ->
+          token ";" *> return (VarDeclr (None, v_type, r_val)) ) ]
+      str
+
 
  end
 
@@ -201,7 +290,7 @@ let parse_field =
       in
     Expr.def_type
     >>= fun f_type ->
-      sep_by one_var (token ",")
+      sep_by (token ",") one_var
       >>= fun vars -> token ";" *> return @@ VarField (f_type, vars)
 
 
@@ -210,7 +299,7 @@ let parse_method =
   >>= fun m_type ->
     Expr.ident
     >>= fun name ->
-      token "(" *> sep_by get_params (token ",")
+      token "(" *> sep_by (token ",") get_params
       >>= fun m_params ->
         token ")" *> Stmt.parse_block
         >>= fun block -> 
@@ -219,7 +308,7 @@ let parse_method =
 let parse_constr =
   Expr.ident
   >>= fun c_name ->
-    token "(" *> sep_by get_params (token ",")
+    token "(" *> sep_by (token ",") get_params
     >>= fun constr_params ->
       token ")" *> Stmt.parse_block
       >>= fun block -> 
