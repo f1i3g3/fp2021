@@ -10,11 +10,11 @@
 ;  (public_name demoNO)
 ;  (libraries c_sharp_lib))
 
-; (executable
-;  (name demoParse)
-;  (modules demoParse)
-;  (public_name demoParse)
-;  (libraries c_sharp_lib))
+(executable
+ (name demoParser)
+ (modules demoParser)
+ (public_name Demo.Parser)
+ (libraries CSharp.Lib))
 
-; (cram
-;  (deps ./demoNO.exe ./demoAO.exe ./demoParse.exe))
+(cram
+ (deps ./demoParser.exe))
