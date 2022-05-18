@@ -25,7 +25,7 @@ let get_modifier_list =
 module Expr = struct
   open Ast
 
-  let parse_string = (* char array *)
+  let parse_string = (* char TypeArray  *)
     let string_of_chars chars = (* to string *)
       let buf = Buffer.create 16 in (* 20 *)
       List.iter (Buffer.add_char buf) chars ;
@@ -125,7 +125,7 @@ end
 module Stmt = struct
   open Expr
 
-  let rec parse_statement input =
+  let rec parse_stmts input =
     choice
       [ continue; break; parse_expr; return_stmt; if_stmt
       ; while_stmt ; var_declr; for_stmt; stmt_block; writeline ]
@@ -134,10 +134,10 @@ module Stmt = struct
   and if_stmt input =
     ( token "if" >> parens expr
     >>= fun condition ->
-    parse_statement
+    parse_stmts
     >>= fun then_stmt ->
     choice
-      [ ( token "else" >> parse_statement
+      [ ( token "else" >> parse_stmts
         >>= fun else_stmt -> return (If (condition, then_stmt, Some else_stmt))
         ); return (If (condition, then_stmt, None)) ] )
       input
@@ -145,7 +145,7 @@ module Stmt = struct
   and while_stmt input =
     ( token "while" >> parens expr
     >>= fun condition ->
-    parse_statement >>= fun stmt -> return (While (condition, stmt)) )
+    parse_stmts >>= fun stmt -> return (While (condition, stmt)) )
       input
 
   and var_declr input =
@@ -168,21 +168,21 @@ module Stmt = struct
         sep_by1 helper (token ",")
         >>= fun var_pair ->
         token ";" >> return (VarDeclr (None, var_type, var_pair)) ) 
-      ; ( def_type (* array var decl with dimension = 0 *)
+      ; ( def_type (* TypeArray  var decl with dimension = 0 *)
         >>= fun var_type ->
         ident_obj >>= fun one_var -> 
         token "[" >> token "]" >> 
-        token ";" >> return (VarDeclr (None, TypeArray(var_type, 0), [(one_var, None)])) )
-      ; ( def_type (* array var decl with dimension <> 0 *)
+        token ";" >> return (VarDeclr (None, TypeArray (var_type, 0), [(one_var, None)])) )
+      ; ( def_type (* TypeArray  var decl with dimension <> 0 *)
         >>= fun var_type ->
         ident_obj >>= fun one_var ->
         ar_braces (convert_to_int) >>= fun dim -> 
-        token ";" >> return (VarDeclr (None, TypeArray(var_type, dim), [(one_var, None)])) )
+        token ";" >> return (VarDeclr (None, TypeArray (var_type, dim), [(one_var, None)])) )
         ]
       input
 
   and stmt_block input =
-    ( braces (sep_by parse_statement spaces)
+    ( braces (sep_by parse_stmts spaces)
     >>= fun stmts -> return (StmtBlock stmts) )
       input
 
@@ -198,7 +198,7 @@ module Stmt = struct
     >>= fun condition ->
     sep_by expr (token ",")
     >>= fun after ->
-    token ")" >> parse_statement
+    token ")" >> parse_stmts
     >>= fun body -> return (For (declare, condition, after, body)) )
       input
 
@@ -273,3 +273,104 @@ let parse_class =
   token "}" >> return (Class (modifiers, name, class_elements))
 
 let parser = parse_class
+
+module Tests = struct
+  open Expr
+  open Ast
+
+   let%test _ =
+    apply_parser get_modifier_list "public static const async"
+    = Some [Public; Static; Const; Async]
+
+  let%test _ = apply_parser convert_to_int "4" = Some 4
+  let%test _ = apply_parser null "  null" = Some Null
+  let%test _ = apply_parser ident_obj "   sth" = Some "sth"
+  let%test _ = apply_parser ident_obj "  Sth" = Some "Sth"
+  let%test _ = apply_parser get_var "   sth" = Some (Var "sth")
+
+  let%test _ =
+    apply_parser parse_string "\"sth\"" = Some (ConstE (ValString "sth"))
+
+  let%test _ = apply_parser atomic "      123" = Some (ConstE (ValInt 123))
+  let%test _ = apply_parser ident_obj "  123sth" = None
+  let%test _ = apply_parser atomic "\"sth\"" = Some (ConstE (ValString "sth"))
+  let%test _ = apply_parser atomic "   true" = Some (ConstE (ValBool true))
+  let%test _ = apply_parser atomic "   false" = Some (ConstE (ValBool false))
+  let%test _ = apply_parser atomic "   null" = Some Null
+  let%test _ = apply_parser def_type "  int" = Some TypeInt
+  let%test _ = apply_parser def_type "  void" = Some TypeVoid
+  let%test _ = apply_parser def_type "  string" = Some TypeString
+  let%test _ = apply_parser def_type "  Excep" = Some (TypeClass "Excep")
+
+
+  let%test _ = apply_parser Stmt.parse_stmts "  int a[42];" = Some (VarDeclr (None, TypeArray (TypeInt, 42), [("a", None)]))
+
+  (* expression tests *)
+  
+  let%test _ =
+    apply_parser expr "a = b = 1"
+    = Some (Assign (Var "a", Assign (Var "b", ConstE (ValInt 1))))
+
+  let%test _ =
+    apply_parser expr "1 + 2"
+    = Some (Add (ConstE (ValInt 1), ConstE (ValInt 2)))
+
+  let%test _ =
+    apply_parser expr "2/5 + 1 * (5 % 3)"
+    = Some
+        (Add
+           ( Div (ConstE (ValInt 2), ConstE (ValInt 5))
+           , Mul
+               (ConstE (ValInt 1), Mod (ConstE (ValInt 5), ConstE (ValInt 3)))
+           ) )
+
+  let%test _ =
+    apply_parser expr "x = true"
+    = Some (Assign (Var "x", ConstE (ValBool true)))
+
+  (*classes and statement tests*)
+  (* let%test _ =
+    apply_parser expr "new Person(19,\"Artem\")"
+    = Some
+        (ClassCreate
+           ("Person", [ConstE (ValInt 19); ConstE (ValString "Artem")]) ) *)
+
+  let get_body =
+    apply_parser Stmt.stmt_block
+      {|
+                      {
+                        return message;
+                      }
+                  |}
+
+  let%test _ =
+    get_body = Some (StmtBlock [Return (Some (Var "message"))])
+
+  let get_dec =
+    apply_parser parse_class
+      {|
+               public class AnyException
+               {
+                 public int num;
+                 public int TextNum()
+                 {
+                     return num;
+                 }
+               }
+           |}
+
+  let%test _ =
+    get_dec
+    = Some
+        (Class
+           ( [Public]
+           , "AnyException"
+           , [ ([Public], VarField (TypeInt, [("num", None)]))
+             ; ( [Public]
+               , Method
+                   ( TypeInt
+                   , "TextNum"
+                   , []
+                   , StmtBlock [Return (Some (Var "num"))] ) ) ] ) )
+   
+end
