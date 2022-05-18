@@ -1,4 +1,4 @@
-(lang dune 2.9.1)
+(lang dune 2.9)
 
 (generate_opam_files true)
 
@@ -21,7 +21,7 @@
  (version 0.1)
  (depends
   dune
-  angstrom
+  opal
   (ppx_inline_test :with-test)
   ppx_expect
   ppx_show

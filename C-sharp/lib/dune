@@ -1,8 +1,23 @@
+(env
+ (dev
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+ (release
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+ (tests
+  (flags
+   (:standard -thread  -I +threads -o unix.cma -o threads.cma -g -safe-string
+                    -linkall -warn-error -A -w -3-9-32-34-58)))
+)
+
 (library
  (name c_sharp_lib)
  (public_name CSharp.Lib)
- (modules Ast Parser Interpreter)
- (libraries base angstrom ppx_show.runtime)
+ (modules Ast Parser Parser_tests)
+ (libraries base opal ppx_show.runtime stdio)
  (preprocess
-  (pps ppx_expect ppx_show))
+  (pps ppx_expect ppx_show ppx_deriving.show ppx_deriving.eq))
  (inline_tests))
