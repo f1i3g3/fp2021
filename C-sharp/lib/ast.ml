@@ -1,27 +1,34 @@
-type _type = (* CT_Type *)
+type _type =
   | TypeInt
-  | TypeChar (* ?? *)
   | TypeVoid
   | TypeString
+  | TypeBool
   | TypeClass of string
+  | TypeArray of _type * int
 [@@deriving show { with_path = false }]
- (* Add more!!! *)
 
-type modifier = (* ?? *)
+type modifier = 
   | Public 
   | Static
-  | Const (* ?? *)
+  | Const
+  | Async
 [@@deriving show { with_path = false }]
 
 type values = (* C_Type *)
   | ValInt of int
-  | ValChar of char
+  | ValString of string (* string?? *)
   | ValNull
-  | ValArray of expr list (* ?? *)
+  | ValVoid
+  | ValBool of bool
+  (* ValClass? *)
 [@@deriving show {with_path= false}]
 
-and expr =
-  | Value of values
+and obj_ref =
+  | ObjNull
+  | ObjRef of string * string option (*class key and parent key??*)
+[@@deriving show {with_path= false}]
+
+type expr =
   | Add of expr * expr
   | Sub of expr * expr
   | Mul of expr * expr
@@ -41,29 +48,32 @@ and expr =
   | LessEqual of expr * expr
   | MoreEqual of expr * expr
   | Null
-  | FuncCall of string * expr list
-[@@deriving show { with_path = false }]
-
-and stmt = 
-  | VarDeclr of modifier option * _type * (string * expr option) list (* ?? *)
+  | Var of string
+  | ConstE of values
   | Assign of expr * expr (* = *)
-  | If of expr * stmt * stmt option (*if else*)
+  | FuncCall of string * expr list (* CallMethod *)
+  | Await of expr
+  | ArrayAccess of expr * expr
+  | Lambda of expr (* not implemented *)
+  | Linq of expr (* not implemented *)
+
+and stmt =
+  | Expr of expr (*???*)
+  | StmtBlock of stmt list
+  | For of stmt option * expr option * expr list * stmt (*because you can write for(int i = 0, j = 5; i < 4; i++, j--)*)
+  | If of expr * stmt * stmt option (*statement option is "else"*)
   | While of expr * stmt
-  | For of stmt option * expr option * expr list * stmt
+  | Return of expr option
   | Break
   | Continue
-  | Return of expr option
-  | Block of stmt list
-(* fun decl? *)
-(* linq? *)
-[@@deriving show { with_path = false }]
+  | VarDeclr of modifier option * _type * (string * expr option) list
+  | WriteLine of expr
 
-and field =
+and field = (* ??? *)
   | VarField of _type * (string * expr option) list
   | Method of _type * string * (_type * string) list * stmt
-  | Constr of string * (_type * string) list * stmt
 [@@deriving show { with_path = false }]
 
 and c_sharp_class =
-  | Class of modifier list * string * (modifier list * field) option (* Methods *)
+  | Class of modifier list * string * (modifier list * field) list(* Methods *)
 [@@deriving show { with_path = false }]
