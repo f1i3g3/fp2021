@@ -32,7 +32,7 @@ module Interpreter_for_classes (M : MONADERROR) = struct
     | [] -> return ret
     | x :: xs -> action x >> monadic_list_iter action xs ret
 
-  let system_exception_init class_map =
+  let prog_init class_map =
     let field_map = KeyMap.empty in
     let method_map = KeyMap.empty in
     let body = StmtsBlock [Return (Some (Var "message"))] in
@@ -145,7 +145,7 @@ module Interpreter_for_classes (M : MONADERROR) = struct
     match class_list_ast with
     | [] -> error "No classes found, incorrect syntax or empty file"
     | _ ->
-        system_exception_init class_map
+        prog_init class_map
         >>= fun class_map_with_ex ->
         add_classes class_list_ast class_map_with_ex
 end

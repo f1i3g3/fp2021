@@ -42,7 +42,7 @@ module Interpreter (M : MONADERROR) = struct
 
   let thread_data = Hashtbl.create 100 (* to return async task results *)
 
-  let init_contex variable_map =
+  let init_context variable_map =
     return
       { variable_map
       ; current_method_type= TypeVoid
@@ -957,7 +957,7 @@ module Interpreter (M : MONADERROR) = struct
    fun class_map ->
     find_main_class class_map
     >>= fun main_class ->
-    init_contex KeyMap.empty
+    init_context KeyMap.empty
     >>= fun ctx ->
     let main = KeyMap.find "Main" main_class.method_map in
     eval_stmt main.body ctx class_map
