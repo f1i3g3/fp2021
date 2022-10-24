@@ -10,7 +10,11 @@ Features done (append only):
 
 - Ast
 - Parser
-- Interpreter
+- Interpreter:
+    - Basic types
+    - Async/await
+    - Arrays
+    - Simple variables
 
 Features in progress (and TODOs):
 
