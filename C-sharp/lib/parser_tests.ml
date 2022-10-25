@@ -95,30 +95,6 @@ let%test _ =
 
 let%test _ =
   apply_parser parse_stmts
-    {|  if(num1 > num2)
-{
-    Console.WriteLine(a.Sum());
-}
-else if (num1 < num2)
-{
-    Console.WriteLine(a.b);
-}
-else
-{
-    Console.WriteLine("2");
-} |}
-  = Some
-      (If
-         ( More (Var "num1", Var "num2")
-         , StmtsBlock [Print (Access (Var "a", FuncCall ("Sum", [])))]
-         , Some
-             (If
-                ( Less (Var "num1", Var "num2")
-                , StmtsBlock [Print (Access (Var "a", Var "b"))]
-                , Some (StmtsBlock [Print (ConstExpr (ValString "2"))]) ) ) ) )
-
-let%test _ =
-  apply_parser parse_stmts
     {| while (i > 0)
 {
     Console.WriteLine(i);
@@ -187,45 +163,3 @@ let%test _ =
 let%test _ =
   apply_parser parse_class_elements {|  public int sum;|}
   = Some ([Public], VarField (TypeInt, [("sum", None)]))
-
-let%test _ =
-  apply_parser parse_class_elements
-    {| static void SayHello()
-{
-    int hour = 23;
-    if(hour > 22)
-    {
-        return;
-    }
-    else
-    {
-        Console.WriteLine("Hello");
-    }
-}
-|}
-  = Some
-      ( [Static]
-      , Method
-          ( TypeVoid
-          , "SayHello"
-          , []
-          , StmtsBlock
-              [ VarDeclr
-                  (None, TypeInt, [("hour", Some (ConstExpr (ValInt 23)))])
-              ; If
-                  ( More (Var "hour", ConstExpr (ValInt 22))
-                  , StmtsBlock [Return None]
-                  , Some (StmtsBlock [Print (ConstExpr (ValString "Hello"))]) )
-              ] ) )
-
-let%test _ =
-  apply_parser parse_class_elements
-    {| public Person(string n) { name = n; age = 18; }|}
-  = Some
-      ( [Public]
-      , Constructor
-          ( "Person"
-          , [(String, "n")]
-          , StmtsBlock
-              [ Expression (Assign (Var "name", Var "n"))
-              ; Expression (Assign (Var "age", ConstExpr (ValInt 18))) ] ) )
