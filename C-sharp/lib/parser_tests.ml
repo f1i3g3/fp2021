@@ -3,9 +3,7 @@ open Parser
 open Parser.Expr
 open Parser.Stmt
 
-let%test _ =
-  apply_parser get_modifiers "public static" = Some [Public; Static]
-
+let%test _ = apply_parser get_modifiers "public static" = Some [Public; Static]
 let%test _ = apply_parser convert_to_int "1" = Some 1
 let%test _ = apply_parser null "  null" = Some Null
 let%test _ = apply_parser ident_obj "   car" = Some "car"
@@ -13,14 +11,14 @@ let%test _ = apply_parser ident_obj "  Cat1" = Some "Cat1"
 let%test _ = apply_parser get_variable "   Cat" = Some (Var "Cat")
 
 (* let%test _ =
-  apply_parser parse_string "\"Parse\"" = Some (ConstExpr (ValString "Parse")) *)
+   apply_parser parse_string "\"Parse\"" = Some (ConstExpr (ValString "Parse")) *)
 
-let%test _ = apply_parser atomic "      123123" = Some (ConstExpr (ValInt 123123))
+let%test _ =
+  apply_parser atomic "      123123" = Some (ConstExpr (ValInt 123123))
+
 let%test _ = apply_parser ident_obj "  123Ret" = None
-
 (* let%test _ =
-  apply_parser atomic "\"Parse\"" = Some (ConstExpr (ValString "Parse")) *)
-
+   apply_parser atomic "\"Parse\"" = Some (ConstExpr (ValString "Parse")) *)
 let%test _ = apply_parser atomic "   true" = Some (ConstExpr (ValBool true))
 let%test _ = apply_parser atomic "   false" = Some (ConstExpr (ValBool false))
 let%test _ = apply_parser atomic "   null" = Some Null
@@ -41,43 +39,15 @@ let%test _ =
   = Some
       (Add
          ( Div (ConstExpr (ValInt 2), ConstExpr (ValInt 5))
-         , Mul (ConstExpr (ValInt 3), Mod (ConstExpr (ValInt 5), ConstExpr (ValInt 3)))
-         ))
+         , Mul
+             ( ConstExpr (ValInt 3)
+             , Mod (ConstExpr (ValInt 5), ConstExpr (ValInt 3)) ) ) )
 
 let%test _ =
   apply_parser expr "x = true"
   = Some (Assign (Var "x", ConstExpr (ValBool true)))
 
-(* let%test _ =
-  apply_parser expr "a.b.c"
-  = Some (Access (Access (Var "a", Var "b"), Var "c")) *)
-
-(* let%test _ =
-  apply_parser expr "obj.Sum(5, arg2, arg3 * 3)"
-  = Some
-      (Access
-         ( Var "obj"
-         , FuncCall
-             ( "Sum"
-             , [ ConstExpr (ValInt 5); Var "arg2"
-               ; Mul (Var "arg3", ConstExpr (ValInt 3)) ] ) ))
- *)
-(* let%test _ =
-  apply_parser expr "Sum(obj.a, 3)"
-  = Some
-      (FuncCall
-         ("Sum", [Access (Var "obj", Var "a"); ConstExpr (ValInt 3)])) *)
-(* 
-let%test _ =
-  apply_parser expr "new Shop(5,\"MVideo\")"
-  = Some
-      (ClassCreate ("Shop", [ConstExpr (ValInt 5); ConstExpr (ValString "MVideo")])) *)
-
-(* let%test _ =
-  apply_parser expr "Fork(new Child())"
-  = Some (FuncCall ("Fork", [ClassCreate ("Child", [])])) *)
-
-(* -----------------------  STATEMENTS ------------------------*)
+(* -----------------------  STATEMENTS TESTS ------------------------*)
 
 let%test _ =
   apply_parser parse_stmts "int a = 0, b = 1, c = 2;"
@@ -85,8 +55,9 @@ let%test _ =
       (VarDeclr
          ( None
          , TypeInt
-         , [ ("a", Some (ConstExpr (ValInt 0))); ("b", Some (ConstExpr (ValInt 1)))
-           ; ("c", Some (ConstExpr (ValInt 2))) ] ))
+         , [ ("a", Some (ConstExpr (ValInt 0)))
+           ; ("b", Some (ConstExpr (ValInt 1)))
+           ; ("c", Some (ConstExpr (ValInt 2))) ] ) )
 
 let%test _ =
   apply_parser parse_stmts "const int a = 0, b = 1, c = 2;"
@@ -94,8 +65,9 @@ let%test _ =
       (VarDeclr
          ( Some Const
          , TypeInt
-         , [ ("a", Some (ConstExpr (ValInt 0))); ("b", Some (ConstExpr (ValInt 1)))
-           ; ("c", Some (ConstExpr (ValInt 2))) ] ))
+         , [ ("a", Some (ConstExpr (ValInt 0)))
+           ; ("b", Some (ConstExpr (ValInt 1)))
+           ; ("c", Some (ConstExpr (ValInt 2))) ] ) )
 
 let%test _ = apply_parser parse_break "break;" = Some Break
 let%test _ = apply_parser parse_continue "continue;" = Some Continue
@@ -110,8 +82,8 @@ let%test _ =
 }   |}
   = Some (If (More (Var "num1", Var "num2"), StmtsBlock [], None))
 
-(* let%test _ =
-  apply_parser parse_statement
+let%test _ =
+  apply_parser parse_stmts
     {|  if(num1 > num2)
 {        Console.WriteLine("help");
 }   |}
@@ -119,10 +91,10 @@ let%test _ =
       (If
          ( More (Var "num1", Var "num2")
          , StmtsBlock [Print (ConstExpr (ValString "help"))]
-         , None )) *)
+         , None ) )
 
-(* let%test _ =
-  apply_parser parse_statement
+let%test _ =
+  apply_parser parse_stmts
     {|  if(num1 > num2)
 {
     Console.WriteLine(a.Sum());
@@ -143,10 +115,10 @@ else
              (If
                 ( Less (Var "num1", Var "num2")
                 , StmtsBlock [Print (Access (Var "a", Var "b"))]
-                , Some (StmtsBlock [Print (ConstExpr (ValString "2"))]) )) )) *)
-(* 
+                , Some (StmtsBlock [Print (ConstExpr (ValString "2"))]) ) ) ) )
+
 let%test _ =
-  apply_parser parse_statement
+  apply_parser parse_stmts
     {| while (i > 0)
 {
     Console.WriteLine(i);
@@ -155,11 +127,10 @@ let%test _ =
   = Some
       (While
          ( More (Var "i", ConstExpr (ValInt 0))
-         , StmtsBlock
-             [Print (Var "i"); Expression (PostDec (Var "i"))] )) *)
+         , StmtsBlock [Print (Var "i"); Expr (PostDec (Var "i"))] ) )
 
-(* let%test _ =
-  apply_parser parse_statement
+let%test _ =
+  apply_parser parse_stmts
     {| for (int i = 0; i < 9; i++)
 {
     Console.WriteLine(1);
@@ -169,11 +140,10 @@ let%test _ =
          ( Some (VarDeclr (None, TypeInt, [("i", Some (ConstExpr (ValInt 0)))]))
          , Some (Less (Var "i", ConstExpr (ValInt 9)))
          , [PostInc (Var "i")]
-         , StmtsBlock [Print (ConstExpr (ValInt 1))] )) *)
+         , StmtsBlock [Print (ConstExpr (ValInt 1))] ) )
 
-(* let%test _ =
-  apply_parser parse_statement
-    {| { if(a<b) {}
+let%test _ =
+  apply_parser parse_stmts {| { if(a<b) {}
 for (; ;)
 {
     
@@ -183,11 +153,10 @@ for (; ;)
       (StmtsBlock
          [ If (Less (Var "a", Var "b"), StmtsBlock [], None)
          ; For (None, None, [], StmtsBlock [Print (ConstExpr (ValString "1"))])
-         ])
+         ] )
 
 let%test _ =
-  apply_parser parse_statement
-    {|  for (; i<9;)
+  apply_parser parse_stmts {|  for (; i<9;)
 {
     Console.WriteLine(i*i);
 } |}
@@ -196,10 +165,10 @@ let%test _ =
          ( None
          , Some (Less (Var "i", ConstExpr (ValInt 9)))
          , []
-         , StmtsBlock [Print (Mul (Var "i", Var "i"))] ))
+         , StmtsBlock [Print (Mul (Var "i", Var "i"))] ) )
 
 let%test _ =
-  apply_parser parse_statement
+  apply_parser parse_stmts
     {|  for (int i = 0; i < 9; i++)
 {
     if (i == 5)
@@ -213,16 +182,14 @@ let%test _ =
          , [PostInc (Var "i")]
          , StmtsBlock
              [ If (Equal (Var "i", ConstExpr (ValInt 5)), Break, None)
-             ; Print (Var "i") ] )) *)
+             ; Print (Var "i") ] ) )
 
+let%test _ =
+  apply_parser parse_class_elements {|  public int sum;|}
+  = Some ([Public], VarField (TypeInt, [("sum", None)]))
 
-
-(* let%test _ =
-  apply_parser class_elements {|  public int sum;|}
-  = Some ([Public], VariableField (TypeInt, [("sum", None)])) *)
-
-(* let%test _ =
-  apply_parser class_elements
+let%test _ =
+  apply_parser parse_class_elements
     {| static void SayHello()
 {
     int hour = 23;
@@ -239,19 +206,20 @@ let%test _ =
   = Some
       ( [Static]
       , Method
-          ( Void
+          ( TypeVoid
           , "SayHello"
           , []
           , StmtsBlock
-              [ VarDeclr (None, TypeInt, [("hour", Some (ConstExpr (ValInt 23)))])
+              [ VarDeclr
+                  (None, TypeInt, [("hour", Some (ConstExpr (ValInt 23)))])
               ; If
                   ( More (Var "hour", ConstExpr (ValInt 22))
                   , StmtsBlock [Return None]
-                  , Some (StmtsBlock [Print (ConstExpr (ValString "Hello"))])
-                  ) ] ) )
+                  , Some (StmtsBlock [Print (ConstExpr (ValString "Hello"))]) )
+              ] ) )
 
 let%test _ =
-  apply_parser class_elements
+  apply_parser parse_class_elements
     {| public Person(string n) { name = n; age = 18; }|}
   = Some
       ( [Public]
@@ -261,5 +229,3 @@ let%test _ =
           , StmtsBlock
               [ Expression (Assign (Var "name", Var "n"))
               ; Expression (Assign (Var "age", ConstExpr (ValInt 18))) ] ) )
- *)
-  
