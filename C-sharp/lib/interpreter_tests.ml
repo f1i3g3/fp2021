@@ -1,13 +1,13 @@
 open Parser
 open Interpreter_class.Interpreter_for_classes (Interpreter_class.Result)
 open Interpreter.Interpreter (Interpreter_class.Result)
-open Values_t
+open Tables
 
 let print_ctx_res res_context = function
   | true -> print_endline (show_context res_context ^ "\n")
   | false -> print_endline ""
 
-let test_interp class_list_ast class_map tf =
+let test_interpret class_list_ast class_map tf =
   match interpret_classes class_list_ast class_map with
   | Error m -> print_endline m
   | Ok load_map -> (
@@ -17,4 +17,4 @@ let test_interp class_list_ast class_map tf =
 
 let interpret s tf =
   let parse_s = Option.get (apply_parser parser s) in
-  test_interp parse_s KeyMap.empty tf
+  test_interpret parse_s KeyMap.empty tf

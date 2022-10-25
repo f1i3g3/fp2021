@@ -4,7 +4,7 @@ open Interpreter_class
 
 module Interpreter (M : MONADERROR) = struct
   open M
-  open Values_t
+  open Tables
 
   type arr = ArrayInt of int array | ArrayString of string array | NoArr
   [@@deriving show {with_path= false}]
@@ -297,10 +297,10 @@ module Interpreter (M : MONADERROR) = struct
   let rec eval_stmt stmt in_ctx class_map =
     match stmt with
     | Expr expr ->
-        call_fun (Eval_post_operation in_ctx)
+        call_func (Eval_post_operation in_ctx)
         >>= fun in_ctx ->
         if expr_in_stmt expr then
-          call_fun (Eval_expr (expr, in_ctx, class_map))
+          call_func (Eval_expr (expr, in_ctx, class_map))
           >>= fun new_ctx -> return new_ctx
         else error "Incorrect expression for statement"
     | StmtsBlock stat_list ->
@@ -323,32 +323,33 @@ module Interpreter (M : MONADERROR) = struct
             | _ when ctx.runtime_signal = WasReturn -> return ctx
             | _ when ctx.runtime_signal = WasThrown -> return ctx
             | _ ->
-                call_fun (Eval_stmt (st, ctx, class_map))
+                call_func (Eval_stmt (st, ctx, class_map))
                 >>= fun head_ctx -> eval_stmt_bl tail head_ctx ) in
         eval_stmt_bl stat_list in_ctx
         >>= fun new_ctx ->
-        call_fun (Eval_post_operation new_ctx) >>= fun new_ctx -> return new_ctx
+        call_func (Eval_post_operation new_ctx)
+        >>= fun new_ctx -> return new_ctx
     | If (expr, then_stat, else_stat_opt) -> (
-        call_fun (Eval_expr (expr, in_ctx, class_map))
+        call_func (Eval_expr (expr, in_ctx, class_map))
         >>= fun if_ctx ->
-        call_fun (Eval_post_operation if_ctx)
+        call_func (Eval_post_operation if_ctx)
         >>= fun if_ctx ->
         match if_ctx.last_expr_result with
         | ValBool true -> (
           match then_stat with
           | StmtsBlock _ ->
-              call_fun
+              call_func
                 (Eval_stmt
                    ( then_stat
                    , {if_ctx with visibility_level= if_ctx.visibility_level + 1}
                    , class_map ) )
               >>= fun in_ctx ->
               return {in_ctx with visibility_level= in_ctx.visibility_level - 1}
-          | _ -> call_fun (Eval_stmt (then_stat, if_ctx, class_map)) )
+          | _ -> call_func (Eval_stmt (then_stat, if_ctx, class_map)) )
         | ValBool false -> (
           match else_stat_opt with
           | Some (StmtsBlock _ as else_stat) ->
-              call_fun
+              call_func
                 (Eval_stmt
                    ( else_stat
                    , {if_ctx with visibility_level= if_ctx.visibility_level + 1}
@@ -356,15 +357,16 @@ module Interpreter (M : MONADERROR) = struct
               >>= fun else_ctx ->
               return
                 {else_ctx with visibility_level= else_ctx.visibility_level - 1}
-          | Some else_stat -> call_fun (Eval_stmt (else_stat, if_ctx, class_map))
+          | Some else_stat ->
+              call_func (Eval_stmt (else_stat, if_ctx, class_map))
           | None -> return in_ctx )
         | _ -> error "Incorrect type for condition statement" )
     | While (expr, stmt) -> (
         let rec eval_loop loop_stat ctx =
-          (* Check the break, whether it happened, happened - we exit the cycle *)
+          (* Check the break, if it happened - we would exit the cycle *)
           if ctx.runtime_signal = WasBreak then
             match loop_stat with
-            (* If there was a StatemetntBlock, then we still need to lower the visibility level *)
+            (* If there was a StatementBlock, then we still need to lower the visibility level *)
             | StmtsBlock _ ->
                 return
                   { ctx with
@@ -377,9 +379,9 @@ module Interpreter (M : MONADERROR) = struct
                     runtime_signal= NoSignal
                   ; count_of_nested_cycles= ctx.count_of_nested_cycles - 1 }
           else
-            call_fun (Eval_expr (expr, ctx, class_map))
+            call_func (Eval_expr (expr, ctx, class_map))
             >>= fun new_ctx ->
-            call_fun (Eval_post_operation new_ctx)
+            call_func (Eval_post_operation new_ctx)
             >>= fun new_ctx ->
             match new_ctx.last_expr_result with
             | ValBool false -> (
@@ -394,12 +396,12 @@ module Interpreter (M : MONADERROR) = struct
                     { new_ctx with
                       count_of_nested_cycles= ctx.count_of_nested_cycles - 1 } )
             | ValBool true -> (
-                call_fun (Eval_stmt (loop_stat, new_ctx, class_map))
+                call_func (Eval_stmt (loop_stat, new_ctx, class_map))
                 >>= fun loop_ctx ->
                 match loop_ctx.runtime_signal with
-                (* if we have return  - we interrupt everything and we return the context *)
+                (* If we have return  - we interrupt everything and return the context *)
                 | WasReturn -> return loop_ctx
-                (* we can have continue - so we cycle again*)
+                (* Else, we have continue and can cycle again*)
                 | WasContinue ->
                     eval_loop loop_stat {loop_ctx with runtime_signal= NoSignal}
                 | _ -> eval_loop loop_stat loop_ctx )
@@ -424,7 +426,7 @@ module Interpreter (M : MONADERROR) = struct
               {in_ctx with visibility_level= in_ctx.visibility_level + 1}
               class_map )
         >>= fun new_ctx ->
-        call_fun (Eval_post_operation new_ctx)
+        call_func (Eval_post_operation new_ctx)
         >>= fun new_ctx ->
         let remove_loop_vars (ctx : context) =
           let var_seq = KeyMap.to_seq ctx.variable_map in
@@ -444,12 +446,12 @@ module Interpreter (M : MONADERROR) = struct
              the body and increments after *)
           ( match expr_opt with
           | None -> return {ctx with last_expr_result= ValBool true}
-          | Some expr_t -> call_fun (Eval_expr (expr_t, ctx, class_map)) )
+          | Some expr_t -> call_func (Eval_expr (expr_t, ctx, class_map)) )
           >>= fun cond_ctx ->
-          call_fun (Eval_post_operation cond_ctx)
+          call_func (Eval_post_operation cond_ctx)
           >>= fun cond_ctx ->
           match cond_ctx.last_expr_result with
-          (* If false, it means we are no longer cycling, we return the context with a reduced
+          (* If fail, it means we are no longer cycling, we return the context with a reduced
              counter of nested_cycle and visibility_level*)
           | ValBool false ->
               remove_loop_vars
@@ -460,16 +462,16 @@ module Interpreter (M : MONADERROR) = struct
               let rec interpret_expr_list e_list as_ctx =
                 match e_list with
                 | [] ->
-                    call_fun (Eval_post_operation as_ctx)
+                    call_func (Eval_post_operation as_ctx)
                     >>= fun as_ctx -> return as_ctx
                 | x :: xs ->
                     if expr_in_stmt x then
-                      call_fun (Eval_expr (x, as_ctx, class_map))
+                      call_func (Eval_expr (x, as_ctx, class_map))
                       >>= fun next_ctx -> interpret_expr_list xs next_ctx
                     else error "Incorrect expression for after body list" in
               (* Variables inside the block itself will be in a larger visibility_level than
                  from the initializer *)
-              call_fun
+              call_func
                 (Eval_stmt
                    ( body_st
                    , { cond_ctx with
@@ -508,7 +510,7 @@ module Interpreter (M : MONADERROR) = struct
           error "There is no loop to do continue"
         else return {in_ctx with runtime_signal= WasContinue}
     | Return None when in_ctx.current_method_type = TypeVoid ->
-        call_fun (Eval_post_operation in_ctx)
+        call_func (Eval_post_operation in_ctx)
         >>= fun in_ctx ->
         (* If the type is Void, we exit with the Void value set by the signal that was return *)
         return {in_ctx with last_expr_result= ValVoid; runtime_signal= WasReturn}
@@ -521,9 +523,9 @@ module Interpreter (M : MONADERROR) = struct
         else
           (* We return the context in which there is the result of the expression
              and set the signal that was return *)
-          call_fun (Eval_expr (expr, in_ctx, class_map))
+          call_func (Eval_expr (expr, in_ctx, class_map))
           >>= fun new_ctx ->
-          call_fun (Eval_post_operation new_ctx)
+          call_func (Eval_post_operation new_ctx)
           >>= fun new_ctx -> return {new_ctx with runtime_signal= WasReturn}
     | VarDeclr (modifier, vars_type, var_list) ->
         let is_const : modifier option -> bool = function
@@ -573,9 +575,9 @@ module Interpreter (M : MONADERROR) = struct
                   (* Add to the context variables map what is in the variable expression on the right *)
                   match var_expr_type with
                   | _ when var_expr_type = vars_type ->
-                      call_fun (Eval_expr (var_expr, var_ctx, class_map))
+                      call_func (Eval_expr (var_expr, var_ctx, class_map))
                       >>= fun expr_ctx ->
-                      call_fun (Eval_post_operation expr_ctx)
+                      call_func (Eval_post_operation expr_ctx)
                       >>= fun expr_ctx ->
                       let var =
                         { var_key= var_name
@@ -594,9 +596,9 @@ module Interpreter (M : MONADERROR) = struct
               >>= fun next_ctx -> interpret_var tail next_ctx in
         interpret_var var_list in_ctx
     | Print print_expr ->
-        call_fun (Eval_expr (print_expr, in_ctx, class_map))
+        call_func (Eval_expr (print_expr, in_ctx, class_map))
         >>= fun new_ctx ->
-        call_fun (Eval_post_operation new_ctx)
+        call_func (Eval_post_operation new_ctx)
         >>= fun new_ctx ->
         let eval_printer = function
           | ValInt value -> return (printf "%d\n" value)
@@ -610,7 +612,7 @@ module Interpreter (M : MONADERROR) = struct
           | ValNull -> error "null" in
         eval_printer new_ctx.last_expr_result >> return new_ctx
 
-  and call_fun x =
+  and call_func x =
     (* reserved to construct a stack of calls *)
     match x with
     | Eval_post_operation cont -> eval_post_operation cont

@@ -25,7 +25,7 @@ end
 
 module Interpreter_for_classes (M : MONADERROR) = struct
   open M
-  open Values_t
+  open Tables
 
   let rec monadic_list_iter action list ret =
     match list with
@@ -37,7 +37,11 @@ module Interpreter_for_classes (M : MONADERROR) = struct
     let method_map = KeyMap.empty in
     let body = StmtsBlock [Return (Some (Var "message"))] in
     let method_t : method_t =
-      {method_mod= []; method_type= String; method_key= "ToString"; args= []; body} in
+      { method_mod= []
+      ; method_type= String
+      ; method_key= "ToString"
+      ; args= []
+      ; body } in
     let field_t : field_t =
       {field_type= String; field_key= "message"; is_const= false; sub_tree= None}
     in
@@ -50,14 +54,14 @@ module Interpreter_for_classes (M : MONADERROR) = struct
           ; ( [Public]
             , Method
                 ( []
-                ,String
+                , String
                 , "ToString"
                 , []
-                , StmtsBlock [Return (Some (Var "message"))] ) ) ] )
-    in
+                , StmtsBlock [Return (Some (Var "message"))] ) ) ] ) in
     let field_map = KeyMap.add "message" field_t field_map in
     let method_map = KeyMap.add "ToString" method_t method_map in
     let class_map =
+      (* Delete excptions *)
       KeyMap.add "Exception"
         { class_key= "Exception"
         ; field_map

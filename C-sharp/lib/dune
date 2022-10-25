@@ -23,7 +23,7 @@
   Interpreter_class
   Interpreter_tests 
   Parser_tests
-  Values_t)
+  Tables)
  (libraries opal stdio ppx_show.runtime)
  (inline_tests)
  (preprocess
